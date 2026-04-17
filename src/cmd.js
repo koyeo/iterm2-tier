@@ -1,0 +1,92 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+/**
+ * Load commands from a JSON config file.
+ * The file must contain a JSON object with a `commands` array:
+ *   { "commands": [ "cmd", {"exec":"cmd", ...}, ... ] }
+ * Each element in the array can be:
+ *   - A string (plain command)
+ *   - An object with exec, name, sleep, waitPort, waitFile fields
+ * Returns a string array compatible with -c arguments.
+ */
+export function loadCommandFile(filePath) {
+  const fullPath = resolve(filePath);
+  const content = readFileSync(fullPath, "utf-8");
+  const data = JSON.parse(content);
+
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    throw new Error(`Config file must contain a JSON object with a "commands" array: ${filePath}`);
+  }
+
+  if (!Array.isArray(data.commands)) {
+    throw new Error(`Config file must have a "commands" array: ${filePath}`);
+  }
+
+  return data.commands.map((item) => {
+    if (typeof item === "string") return item;
+    if (typeof item === "object" && item !== null) return JSON.stringify(item);
+    throw new Error(`Invalid entry in config file: ${JSON.stringify(item)}`);
+  });
+}
+
+/**
+ * Parse a command string into a pane object.
+ * If the input is valid JSON with an `exec` field, extract fields.
+ * Otherwise, treat the entire string as a command with no name.
+ *
+ * JSON fields:
+ *   exec (required): command to execute
+ *   name (optional): pane name
+ *   sleep (optional): seconds to sleep before executing
+ *   waitPort (optional): port number to wait for before executing
+ *   waitFile (optional): file path to wait for before executing
+ */
+export function parseCommand(input) {
+  try {
+    const obj = JSON.parse(input);
+    if (typeof obj === "object" && obj !== null && typeof obj.exec === "string") {
+      return {
+        name: typeof obj.name === "string" && obj.name.length > 0 ? obj.name : null,
+        command: obj.exec,
+        sleep: typeof obj.sleep === "number" && obj.sleep > 0 ? obj.sleep : null,
+        waitPort: typeof obj.waitPort === "number" && obj.waitPort > 0 ? obj.waitPort : null,
+        waitFile: typeof obj.waitFile === "string" && obj.waitFile.length > 0 ? obj.waitFile : null,
+      };
+    }
+  } catch {
+    // Not JSON, treat as plain command string
+  }
+  return { name: null, command: input, sleep: null, waitPort: null, waitFile: null };
+}
+
+/**
+ * Wrap a pane's command with wait conditions.
+ * Order: sleep → waitPort → waitFile → exec
+ */
+export function wrapCommand(pane) {
+  const parts = [];
+
+  if (pane.sleep) {
+    parts.push(`sleep ${pane.sleep}`);
+  }
+
+  if (pane.waitPort) {
+    parts.push(`while ! nc -z localhost ${pane.waitPort} 2>/dev/null; do sleep 1; done`);
+  }
+
+  if (pane.waitFile) {
+    parts.push(`while [ ! -f ${pane.waitFile} ]; do sleep 1; done`);
+  }
+
+  parts.push(pane.command);
+
+  return parts.join(" && ");
+}
+
+/**
+ * Build a list of panes from `-c` command arguments.
+ */
+export function buildPanes(cmds) {
+  return cmds.map((s) => parseCommand(s));
+}

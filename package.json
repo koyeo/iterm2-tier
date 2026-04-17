@@ -1,0 +1,23 @@
+{
+  "name": "iterm2-tier",
+  "version": "0.1.0",
+  "description": "Tile multiple commands into iTerm2 split panes",
+  "type": "module",
+  "bin": {
+    "tier": "bin/tier.js"
+  },
+  "scripts": {
+    "test": "node --test 'test/*.test.js'"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/koyeo/iterm2-tier.git"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "commander": "^13.0.0"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "commands": [
+    {"name": "server", "exec": "echo 'Hello Server!'"},
+    {"name": "logs", "exec": "nc -l 3500", "sleep": 2},
+    {"name": "monitor", "exec": "echo 'Hello Monitor!'", "waitPort": 3500}
+  ]
+}

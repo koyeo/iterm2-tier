@@ -1,6 +1,6 @@
 {
   "name": "iterm2-tier",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Tile multiple commands into iTerm2 split panes",
   "type": "module",
   "bin": {

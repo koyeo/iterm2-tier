@@ -122,9 +122,16 @@ export function generateScript(panes) {
   const lines = [
     'tell application "iTerm2"',
     "    activate",
-    "    tell current window",
-    "        set newTab to (create tab with default profile)",
-    "        tell current session of newTab",
+    "    if (count of windows) is 0 then",
+    "        create window with default profile",
+    "        set w to current window",
+    "    else",
+    "        set w to current window",
+    "        tell w",
+    "            set newTab to (create tab with default profile)",
+    "        end tell",
+    "    end if",
+    "    tell current session of current tab of w",
   ];
 
   // First pane in current session of new tab
@@ -133,7 +140,7 @@ export function generateScript(panes) {
   // Subsequent panes each get a new split
   for (let i = 1; i < panes.length; i++) {
     lines.push("        end tell");
-    lines.push("        tell current session of newTab");
+    lines.push("        tell current session of current tab of w");
     lines.push(
       `            set newSession to (split ${splitDir} with default profile)`,
     );
@@ -143,7 +150,6 @@ export function generateScript(panes) {
   }
 
   lines.push("        end tell");
-  lines.push("    end tell");
   lines.push("end tell");
   lines.push("");
 

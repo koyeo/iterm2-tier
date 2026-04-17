@@ -102,20 +102,23 @@ iTerm2 AppleScript API is not responding.
 `;
 
 /**
- * Emit AppleScript to cd into working directory, set session name, and write command.
+ * Emit AppleScript to cd into working directory, write command, and set session name.
+ * Name is set LAST so iTerm2 doesn't override it with the process title.
  */
 function emitPaneActions(lines, indent, pane, dir) {
   if (dir) {
     const escapedDir = escapeForApplescript(dir);
     lines.push(`${indent}write text "cd ${escapedDir}"`);
   }
-  if (pane.name) {
-    const escapedName = escapeForApplescript(pane.name);
-    lines.push(`${indent}set name to "${escapedName}"`);
-  }
   const finalCmd = wrapCommand(pane);
   const escapedCmd = escapeForApplescript(finalCmd);
   lines.push(`${indent}write text "${escapedCmd}"`);
+  if (pane.name) {
+    const escapedName = escapeForApplescript(pane.name);
+    // delay to let the command start, then set name so it sticks
+    lines.push(`${indent}delay 0.3`);
+    lines.push(`${indent}set name to "${escapedName}"`);
+  }
 }
 
 /**
@@ -181,7 +184,7 @@ export function generateFindSessionsScript(names) {
     "            repeat with s in sessions of t",
     "                set sName to name of s",
     "                repeat with tName in targetNames",
-    "                    if sName is equal to contents of tName then",
+    '                    if sName is contents of tName or sName starts with (contents of tName & " ") then',
     '                        set foundNames to foundNames & sName & linefeed',
     "                    end if",
     "                end repeat",
@@ -207,13 +210,17 @@ function findNamedSessions(names) {
   try {
     const output = execFileSync("osascript", ["-e", script], {
       encoding: "utf-8",
-      stdio: ["ignore", "pipe", "ignore"],
+      stdio: ["ignore", "pipe", "pipe"],
     });
     return output
       .trim()
       .split("\n")
       .filter((n) => n.length > 0);
-  } catch {
+  } catch (err) {
+    const stderr = err.stderr ? err.stderr.toString().trim() : "";
+    if (stderr) {
+      process.stderr.write(`Warning: failed to check existing panes: ${stderr}\n`);
+    }
     return [];
   }
 }

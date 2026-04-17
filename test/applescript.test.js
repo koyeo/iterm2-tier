@@ -33,7 +33,7 @@ describe("generateScript", () => {
     assert.ok(script.includes("split horizontally"));
   });
 
-  it("includes pane names", () => {
+  it("includes pane names after commands", () => {
     const panes = [
       { name: "server", command: "npm start" },
       { name: "logs", command: "tail -f app.log" },
@@ -42,6 +42,10 @@ describe("generateScript", () => {
     assert.ok(script.includes('set name to "server"'));
     assert.ok(script.includes('set name to "logs"'));
     assert.ok(script.includes('write text "npm start"'));
+    // Name should be set AFTER command so it persists
+    const cmdIdx = script.indexOf('write text "npm start"');
+    const nameIdx = script.indexOf('set name to "server"');
+    assert.ok(nameIdx > cmdIdx, "name should be set after command");
   });
 
   it("omits name when null", () => {

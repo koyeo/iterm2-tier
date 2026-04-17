@@ -102,9 +102,13 @@ iTerm2 AppleScript API is not responding.
 `;
 
 /**
- * Emit AppleScript to set session name and write command.
+ * Emit AppleScript to cd into working directory, set session name, and write command.
  */
-function emitPaneActions(lines, indent, pane) {
+function emitPaneActions(lines, indent, pane, dir) {
+  if (dir) {
+    const escapedDir = escapeForApplescript(dir);
+    lines.push(`${indent}write text "cd ${escapedDir}"`);
+  }
   if (pane.name) {
     const escapedName = escapeForApplescript(pane.name);
     lines.push(`${indent}set name to "${escapedName}"`);
@@ -117,7 +121,7 @@ function emitPaneActions(lines, indent, pane) {
 /**
  * Generate AppleScript to tile panes horizontally in a new tab.
  */
-export function generateScript(panes) {
+export function generateScript(panes, dir) {
   const splitDir = "horizontally";
   const lines = [
     'tell application "iTerm2"',
@@ -135,7 +139,7 @@ export function generateScript(panes) {
   ];
 
   // First pane in current session of new tab
-  emitPaneActions(lines, "            ", panes[0]);
+  emitPaneActions(lines, "            ", panes[0], dir);
 
   // Subsequent panes each get a new split
   for (let i = 1; i < panes.length; i++) {
@@ -145,7 +149,7 @@ export function generateScript(panes) {
       `            set newSession to (split ${splitDir} with default profile)`,
     );
     lines.push("            tell newSession");
-    emitPaneActions(lines, "                ", panes[i]);
+    emitPaneActions(lines, "                ", panes[i], dir);
     lines.push("            end tell");
   }
 
@@ -231,7 +235,7 @@ function confirm(message) {
  * Ensure iTerm2 is running, check for duplicate named sessions,
  * generate the tiling script, and execute it.
  */
-export async function tierCommands(panes) {
+export async function tierCommands(panes, dir) {
   // Check if iTerm2 is installed
   if (!isItermInstalled()) {
     throw new Error(ITERM2_SETUP_GUIDE);
@@ -266,7 +270,7 @@ export async function tierCommands(panes) {
     }
   }
 
-  const script = generateScript(panes);
+  const script = generateScript(panes, dir);
 
   try {
     execFileSync("osascript", ["-e", script], {

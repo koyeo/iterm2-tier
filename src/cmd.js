@@ -1,17 +1,21 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
 
 /**
  * Load commands from a JSON config file.
  * The file must contain a JSON object with a `commands` array:
- *   { "commands": [ "cmd", {"exec":"cmd", ...}, ... ] }
+ *   { "dir": "./", "commands": [ "cmd", {"exec":"cmd", ...}, ... ] }
  * Each element in the array can be:
  *   - A string (plain command)
  *   - An object with exec, name, sleep, waitPort, waitFile fields
- * Returns a string array compatible with -c arguments.
+ *
+ * If `dir` is specified, relative paths are resolved from the config file's directory.
+ *
+ * Returns { commands: string[], dir: string | null }
  */
 export function loadCommandFile(filePath) {
   const fullPath = resolve(filePath);
+  const fileDir = dirname(fullPath);
   const content = readFileSync(fullPath, "utf-8");
   const data = JSON.parse(content);
 
@@ -23,11 +27,19 @@ export function loadCommandFile(filePath) {
     throw new Error(`Config file must have a "commands" array: ${filePath}`);
   }
 
-  return data.commands.map((item) => {
+  const commands = data.commands.map((item) => {
     if (typeof item === "string") return item;
     if (typeof item === "object" && item !== null) return JSON.stringify(item);
     throw new Error(`Invalid entry in config file: ${JSON.stringify(item)}`);
   });
+
+  // Resolve dir relative to config file's directory
+  let dir = null;
+  if (typeof data.dir === "string" && data.dir.length > 0) {
+    dir = resolve(fileDir, data.dir);
+  }
+
+  return { commands, dir };
 }
 
 /**

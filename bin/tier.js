@@ -8,10 +8,13 @@ const cli = parseCli(process.argv);
 
 // Merge file commands (-f) and inline commands (-c)
 let allCommands = [];
+let fileDir = null;
 
 if (cli.file) {
   try {
-    allCommands = loadCommandFile(cli.file);
+    const result = loadCommandFile(cli.file);
+    allCommands = result.commands;
+    fileDir = result.dir;
   } catch (err) {
     console.error(`Failed to load config file: ${err.message}`);
     process.exit(1);
@@ -27,6 +30,9 @@ if (panes.length === 0) {
   process.exit(1);
 }
 
+// Priority: CLI -d > config file dir > cwd
+const dir = cli.cliDir || fileDir || process.cwd();
+
 const count = panes.length;
 const names = panes.filter((p) => p.name).map((p) => p.name);
 
@@ -37,7 +43,7 @@ if (names.length === 0) {
 }
 
 try {
-  await tierCommands(panes);
+  await tierCommands(panes, dir);
   process.stderr.write(`✅ ${count} pane(s) tiled successfully\n`);
 } catch (err) {
   console.error(err.message);

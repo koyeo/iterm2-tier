@@ -76,6 +76,10 @@ Notes:
     .option(
       "-f, --file <path>",
       "Load commands from a JSON config file",
+    )
+    .option(
+      "-d, --dir <path>",
+      "Working directory for all panes (default: current directory)",
     );
 
   program.parse(argv);
@@ -90,5 +94,6 @@ Notes:
   return {
     commands: opts.command,
     file: opts.file || null,
+    cliDir: opts.dir || null,
   };
 }

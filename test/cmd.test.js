@@ -153,14 +153,50 @@ describe("loadCommandFile", () => {
         { exec: "npm test", waitPort: 3000 },
       ],
     }));
-    const cmds = loadCommandFile(file);
-    assert.equal(cmds.length, 3);
-    assert.equal(cmds[0], "htop");
-    const parsed1 = JSON.parse(cmds[1]);
+    const result = loadCommandFile(file);
+    assert.equal(result.commands.length, 3);
+    assert.equal(result.commands[0], "htop");
+    assert.equal(result.dir, null);
+    const parsed1 = JSON.parse(result.commands[1]);
     assert.equal(parsed1.name, "server");
     assert.equal(parsed1.exec, "npm start");
-    const parsed2 = JSON.parse(cmds[2]);
+    const parsed2 = JSON.parse(result.commands[2]);
     assert.equal(parsed2.waitPort, 3000);
+  });
+
+  it("resolves relative dir from config file directory", () => {
+    const file = writeTmpFile("withdir.json", JSON.stringify({
+      dir: "./sub",
+      commands: ["ls"],
+    }));
+    const result = loadCommandFile(file);
+    assert.equal(result.dir, join(tmpDir, "sub"));
+  });
+
+  it("resolves absolute dir as-is", () => {
+    const file = writeTmpFile("absdir.json", JSON.stringify({
+      dir: "/tmp/my-project",
+      commands: ["ls"],
+    }));
+    const result = loadCommandFile(file);
+    assert.equal(result.dir, "/tmp/my-project");
+  });
+
+  it("resolves '.' to config file directory", () => {
+    const file = writeTmpFile("dotdir.json", JSON.stringify({
+      dir: ".",
+      commands: ["ls"],
+    }));
+    const result = loadCommandFile(file);
+    assert.equal(result.dir, tmpDir);
+  });
+
+  it("returns null dir when not specified", () => {
+    const file = writeTmpFile("nodir.json", JSON.stringify({
+      commands: ["ls"],
+    }));
+    const result = loadCommandFile(file);
+    assert.equal(result.dir, null);
   });
 
   it("throws on plain array", () => {
@@ -184,8 +220,8 @@ describe("loadCommandFile", () => {
         { name: "web", exec: "npm start", sleep: 2 },
       ],
     }));
-    const cmds = loadCommandFile(file);
-    const panes = buildPanes(cmds);
+    const result = loadCommandFile(file);
+    const panes = buildPanes(result.commands);
     assert.equal(panes.length, 2);
     assert.equal(panes[0].command, "htop");
     assert.equal(panes[1].name, "web");

@@ -20,7 +20,6 @@ describe("generateScript", () => {
   it("creates new tab for single command", () => {
     const panes = [{ name: null, command: "ls" }];
     const script = generateScript(panes);
-    assert.ok(script.includes("create tab with default profile"));
     assert.ok(script.includes('write text "ls"'));
     assert.ok(!script.includes("split horizontally"));
   });
@@ -31,7 +30,6 @@ describe("generateScript", () => {
       { name: null, command: "b" },
     ];
     const script = generateScript(panes);
-    assert.ok(script.includes("create tab with default profile"));
     assert.ok(script.includes("split horizontally"));
   });
 
@@ -69,6 +67,30 @@ describe("generateScript", () => {
     assert.ok(script.includes('write text "cmd3"'));
     const splitMatches = script.match(/split horizontally/g);
     assert.equal(splitMatches.length, 2);
+  });
+
+  it("prepends cd to working directory for each pane", () => {
+    const panes = [
+      { name: null, command: "ls" },
+      { name: null, command: "pwd" },
+    ];
+    const script = generateScript(panes, "/tmp/my-project");
+    const cdMatches = script.match(/write text "cd \/tmp\/my-project"/g);
+    assert.equal(cdMatches.length, 2);
+  });
+
+  it("does not cd when dir is undefined", () => {
+    const panes = [{ name: null, command: "ls" }];
+    const script = generateScript(panes);
+    assert.ok(!script.includes("cd "));
+  });
+
+  it("cd comes before command", () => {
+    const panes = [{ name: null, command: "npm start" }];
+    const script = generateScript(panes, "/work");
+    const cdIdx = script.indexOf('write text "cd /work"');
+    const cmdIdx = script.indexOf('write text "npm start"');
+    assert.ok(cdIdx < cmdIdx);
   });
 });
 

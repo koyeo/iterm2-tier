@@ -14,18 +14,15 @@ export function escapeForApplescript(input) {
  * Check if iTerm2 is installed on the system.
  */
 function isItermInstalled() {
+  // Check common install path first
   try {
-    execSync("mdfind 'kMDItemCFBundleIdentifier == \"com.googlecode.iterm2\"' | head -1", {
-      encoding: "utf-8",
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-    // Also check common paths as fallback
-    try {
-      execFileSync("test", ["-d", "/Applications/iTerm.app"], { stdio: "ignore" });
-      return true;
-    } catch {
-      // not in /Applications, try mdfind result
-    }
+    execFileSync("test", ["-d", "/Applications/iTerm.app"], { stdio: "ignore" });
+    return true;
+  } catch {
+    // not in /Applications
+  }
+  // Fallback: Spotlight search
+  try {
     const result = execSync(
       "mdfind 'kMDItemCFBundleIdentifier == \"com.googlecode.iterm2\"' | head -1",
       { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] },

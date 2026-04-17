@@ -11,6 +11,32 @@ export function escapeForApplescript(input) {
 }
 
 /**
+ * Check if iTerm2 is installed on the system.
+ */
+function isItermInstalled() {
+  try {
+    execSync("mdfind 'kMDItemCFBundleIdentifier == \"com.googlecode.iterm2\"' | head -1", {
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    // Also check common paths as fallback
+    try {
+      execFileSync("test", ["-d", "/Applications/iTerm.app"], { stdio: "ignore" });
+      return true;
+    } catch {
+      // not in /Applications, try mdfind result
+    }
+    const result = execSync(
+      "mdfind 'kMDItemCFBundleIdentifier == \"com.googlecode.iterm2\"' | head -1",
+      { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] },
+    ).trim();
+    return result.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Check if iTerm2 is currently running.
  */
 function isItermRunning() {
@@ -23,12 +49,60 @@ function isItermRunning() {
 }
 
 /**
+ * Check if iTerm2 supports AppleScript API.
+ */
+function checkItermAppleScriptSupport() {
+  try {
+    const result = execFileSync("osascript", ["-e", 'tell application "iTerm2" to get version'], {
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Launch iTerm2 and wait for it to start.
  */
 function launchIterm() {
   execSync("open -a iTerm", { stdio: "ignore" });
   execSync("sleep 2");
 }
+
+const ITERM2_SETUP_GUIDE = `
+iTerm2 is required but was not found on this system.
+
+  Install:
+    1. Download from https://iterm2.com/downloads.html
+    2. Move iTerm.app to /Applications
+    3. Open iTerm2 and grant Accessibility permissions when prompted
+
+  Or install via Homebrew:
+    $ brew install --cask iterm2
+
+  After installation, ensure AppleScript access is enabled:
+    iTerm2 → Settings → General → Magic → Enable Python API (includes AppleScript)
+
+  Then run tier again.
+`;
+
+const ITERM2_API_GUIDE = `
+iTerm2 AppleScript API is not responding.
+
+  Please check the following:
+    1. Open iTerm2
+    2. Go to Settings → General → Magic
+    3. Ensure "Enable Python API" is checked (this also enables AppleScript control)
+    4. Restart iTerm2
+
+  If the problem persists, try resetting automation permissions:
+    System Settings → Privacy & Security → Automation
+    Ensure your terminal app is allowed to control iTerm2.
+
+  More info: https://iterm2.com/documentation-scripting.html
+`;
 
 /**
  * Emit AppleScript to set session name and write command.
@@ -155,9 +229,21 @@ function confirm(message) {
  * generate the tiling script, and execute it.
  */
 export async function tierCommands(panes) {
+  // Check if iTerm2 is installed
+  if (!isItermInstalled()) {
+    throw new Error(ITERM2_SETUP_GUIDE);
+  }
+
+  // Launch iTerm2 if not running
   if (!isItermRunning()) {
     process.stderr.write("iTerm2 is not running, launching...\n");
     launchIterm();
+  }
+
+  // Verify AppleScript API works
+  const itermVersion = checkItermAppleScriptSupport();
+  if (!itermVersion) {
+    throw new Error(ITERM2_API_GUIDE);
   }
 
   // Check for duplicate named sessions

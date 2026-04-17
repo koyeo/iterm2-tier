@@ -1,10 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import {
-  escapeForApplescript,
-  generateScript,
-  generateFindSessionsScript,
-} from "../src/applescript.js";
+import { escapeForApplescript, generateScript } from "../src/applescript.js";
 
 describe("escapeForApplescript", () => {
   it("escapes double quotes", () => {
@@ -18,53 +14,20 @@ describe("escapeForApplescript", () => {
 
 describe("generateScript", () => {
   it("creates new tab for single command", () => {
-    const panes = [{ name: null, command: "ls" }];
+    const panes = [{ command: "ls" }];
     const script = generateScript(panes);
     assert.ok(script.includes('write text "ls"'));
     assert.ok(!script.includes("split horizontally"));
   });
 
   it("splits horizontally for multiple panes", () => {
-    const panes = [
-      { name: null, command: "a" },
-      { name: null, command: "b" },
-    ];
+    const panes = [{ command: "a" }, { command: "b" }];
     const script = generateScript(panes);
     assert.ok(script.includes("split horizontally"));
   });
 
-  it("includes pane names after commands", () => {
-    const panes = [
-      { name: "server", command: "npm start" },
-      { name: "logs", command: "tail -f app.log" },
-    ];
-    const script = generateScript(panes);
-    assert.ok(script.includes('set name to "server"'));
-    assert.ok(script.includes('set name to "logs"'));
-    assert.ok(script.includes('write text "npm start"'));
-    // Name should be set AFTER command so it persists
-    const cmdIdx = script.indexOf('write text "npm start"');
-    const nameIdx = script.indexOf('set name to "server"');
-    assert.ok(nameIdx > cmdIdx, "name should be set after command");
-  });
-
-  it("omits name when null", () => {
-    const panes = [
-      { name: "web", command: "npm start" },
-      { name: null, command: "htop" },
-    ];
-    const script = generateScript(panes);
-    assert.ok(script.includes('set name to "web"'));
-    const nameMatches = script.match(/set name to/g);
-    assert.equal(nameMatches.length, 1);
-  });
-
   it("generates three panes with two splits", () => {
-    const panes = [
-      { name: null, command: "cmd1" },
-      { name: null, command: "cmd2" },
-      { name: null, command: "cmd3" },
-    ];
+    const panes = [{ command: "cmd1" }, { command: "cmd2" }, { command: "cmd3" }];
     const script = generateScript(panes);
     assert.ok(script.includes('write text "cmd1"'));
     assert.ok(script.includes('write text "cmd2"'));
@@ -74,41 +37,23 @@ describe("generateScript", () => {
   });
 
   it("prepends cd to working directory for each pane", () => {
-    const panes = [
-      { name: null, command: "ls" },
-      { name: null, command: "pwd" },
-    ];
+    const panes = [{ command: "ls" }, { command: "pwd" }];
     const script = generateScript(panes, "/tmp/my-project");
     const cdMatches = script.match(/write text "cd \/tmp\/my-project"/g);
     assert.equal(cdMatches.length, 2);
   });
 
   it("does not cd when dir is undefined", () => {
-    const panes = [{ name: null, command: "ls" }];
+    const panes = [{ command: "ls" }];
     const script = generateScript(panes);
     assert.ok(!script.includes("cd "));
   });
 
   it("cd comes before command", () => {
-    const panes = [{ name: null, command: "npm start" }];
+    const panes = [{ command: "npm start" }];
     const script = generateScript(panes, "/work");
     const cdIdx = script.indexOf('write text "cd /work"');
     const cmdIdx = script.indexOf('write text "npm start"');
     assert.ok(cdIdx < cmdIdx);
-  });
-});
-
-describe("generateFindSessionsScript", () => {
-  it("generates script to search for named sessions", () => {
-    const script = generateFindSessionsScript(["server", "logs"]);
-    assert.ok(script.includes('"server"'));
-    assert.ok(script.includes('"logs"'));
-    assert.ok(script.includes("repeat with w in windows"));
-    assert.ok(script.includes("name of s"));
-  });
-
-  it("escapes special characters in names", () => {
-    const script = generateFindSessionsScript(['test"name']);
-    assert.ok(script.includes('test\\"name'));
   });
 });

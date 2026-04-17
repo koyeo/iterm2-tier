@@ -1,10 +1,8 @@
 import { execFileSync, execSync } from "node:child_process";
-import { createInterface } from "node:readline";
 import { wrapCommand } from "./cmd.js";
 
 /**
  * Escape a string for safe embedding in AppleScript.
- * Replaces backslashes and double quotes to prevent injection.
  */
 export function escapeForApplescript(input) {
   return input.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
@@ -14,14 +12,12 @@ export function escapeForApplescript(input) {
  * Check if iTerm2 is installed on the system.
  */
 function isItermInstalled() {
-  // Check common install path first
   try {
     execFileSync("test", ["-d", "/Applications/iTerm.app"], { stdio: "ignore" });
     return true;
   } catch {
     // not in /Applications
   }
-  // Fallback: Spotlight search
   try {
     const result = execSync(
       "mdfind 'kMDItemCFBundleIdentifier == \"com.googlecode.iterm2\"' | head -1",
@@ -102,8 +98,7 @@ iTerm2 AppleScript API is not responding.
 `;
 
 /**
- * Emit AppleScript to cd into working directory, write command, and set session name.
- * Name is set LAST so iTerm2 doesn't override it with the process title.
+ * Emit AppleScript to cd into working directory and write command.
  */
 function emitPaneActions(lines, indent, pane, dir) {
   if (dir) {
@@ -113,12 +108,6 @@ function emitPaneActions(lines, indent, pane, dir) {
   const finalCmd = wrapCommand(pane);
   const escapedCmd = escapeForApplescript(finalCmd);
   lines.push(`${indent}write text "${escapedCmd}"`);
-  if (pane.name) {
-    const escapedName = escapeForApplescript(pane.name);
-    // delay to let the command start, then set name so it sticks
-    lines.push(`${indent}delay 0.3`);
-    lines.push(`${indent}set name to "${escapedName}"`);
-  }
 }
 
 /**
@@ -140,16 +129,13 @@ export function generateScript(panes, dir) {
     "            set newTab to (create tab with default profile)",
     "        end tell",
     "    end if",
-    // Save the first session as s1
     `${indent}set s1 to current session of current tab of w`,
     `${indent}tell s1`,
   ];
 
-  // First pane
   emitPaneActions(lines, indent2, panes[0], dir);
   lines.push(`${indent}end tell`);
 
-  // Subsequent panes: always split from the last session to maintain order
   for (let i = 1; i < panes.length; i++) {
     const prev = `s${i}`;
     const curr = `s${i + 1}`;
@@ -168,117 +154,21 @@ export function generateScript(panes, dir) {
 }
 
 /**
- * Generate AppleScript to find existing sessions with given names.
- * Returns the script text that outputs matching names (one per line).
+ * Ensure iTerm2 is running, generate the tiling script, and execute it.
  */
-export function generateFindSessionsScript(names) {
-  const escapedNames = names.map((n) => `"${escapeForApplescript(n)}"`);
-  const nameList = `{${escapedNames.join(", ")}}`;
-
-  const lines = [
-    'set targetNames to ' + nameList,
-    'set foundNames to ""',
-    'tell application "iTerm2"',
-    "    repeat with w in windows",
-    "        repeat with t in tabs of w",
-    "            repeat with s in sessions of t",
-    "                set sName to name of s",
-    "                repeat with tName in targetNames",
-    '                    if sName is contents of tName or sName starts with (contents of tName & " ") then',
-    '                        set foundNames to foundNames & sName & linefeed',
-    "                    end if",
-    "                end repeat",
-    "            end repeat",
-    "        end repeat",
-    "    end repeat",
-    "end tell",
-    "return foundNames",
-  ];
-
-  return lines.join("\n");
-}
-
-/**
- * Find existing sessions that match the given names.
- * Returns an array of names that already exist.
- */
-function findNamedSessions(names) {
-  if (names.length === 0) return [];
-
-  const script = generateFindSessionsScript(names);
-
-  try {
-    const output = execFileSync("osascript", ["-e", script], {
-      encoding: "utf-8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    return output
-      .trim()
-      .split("\n")
-      .filter((n) => n.length > 0);
-  } catch (err) {
-    const stderr = err.stderr ? err.stderr.toString().trim() : "";
-    if (stderr) {
-      process.stderr.write(`Warning: failed to check existing panes: ${stderr}\n`);
-    }
-    return [];
-  }
-}
-
-/**
- * Prompt user for confirmation via stdin.
- * Returns a promise that resolves to true if user confirms.
- */
-function confirm(message) {
-  return new Promise((resolve) => {
-    const rl = createInterface({
-      input: process.stdin,
-      output: process.stderr,
-    });
-    rl.question(`${message} (y/N) `, (answer) => {
-      rl.close();
-      resolve(answer.toLowerCase() === "y");
-    });
-  });
-}
-
-/**
- * Ensure iTerm2 is running, check for duplicate named sessions,
- * generate the tiling script, and execute it.
- */
-export async function tierCommands(panes, dir) {
-  // Check if iTerm2 is installed
+export function tierCommands(panes, dir) {
   if (!isItermInstalled()) {
     throw new Error(ITERM2_SETUP_GUIDE);
   }
 
-  // Launch iTerm2 if not running
   if (!isItermRunning()) {
     process.stderr.write("iTerm2 is not running, launching...\n");
     launchIterm();
   }
 
-  // Verify AppleScript API works
   const itermVersion = checkItermAppleScriptSupport();
   if (!itermVersion) {
     throw new Error(ITERM2_API_GUIDE);
-  }
-
-  // Check for duplicate named sessions
-  const names = panes.filter((p) => p.name).map((p) => p.name);
-  if (names.length > 0) {
-    const existing = findNamedSessions(names);
-    if (existing.length > 0) {
-      const unique = [...new Set(existing)];
-      process.stderr.write(
-        `⚠️  Existing pane(s) with same name found: ${unique.join(", ")}\n`,
-      );
-      const ok = await confirm("Continue anyway?");
-      if (!ok) {
-        process.stderr.write("Cancelled\n");
-        return;
-      }
-    }
   }
 
   const script = generateScript(panes, dir);

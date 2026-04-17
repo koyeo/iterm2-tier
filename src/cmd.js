@@ -7,7 +7,7 @@ import { resolve, dirname } from "node:path";
  *   { "dir": "./", "commands": [ "cmd", {"exec":"cmd", ...}, ... ] }
  * Each element in the array can be:
  *   - A string (plain command)
- *   - An object with exec, name, sleep, waitPort, waitFile fields
+ *   - An object with exec, sleep, waitPort, waitFile fields
  *
  * If `dir` is specified, relative paths are resolved from the config file's directory.
  *
@@ -33,23 +33,21 @@ export function loadCommandFile(filePath) {
     throw new Error(`Invalid entry in config file: ${JSON.stringify(item)}`);
   });
 
-  // Resolve dir relative to config file's directory
   let dir = null;
   if (typeof data.dir === "string" && data.dir.length > 0) {
     dir = resolve(fileDir, data.dir);
   }
 
-  return { commands, dir };
+  return { commands, dir, fileDir };
 }
 
 /**
  * Parse a command string into a pane object.
  * If the input is valid JSON with an `exec` field, extract fields.
- * Otherwise, treat the entire string as a command with no name.
+ * Otherwise, treat the entire string as a command.
  *
  * JSON fields:
  *   exec (required): command to execute
- *   name (optional): pane name
  *   sleep (optional): seconds to sleep before executing
  *   waitPort (optional): port number to wait for before executing
  *   waitFile (optional): file path to wait for before executing
@@ -59,7 +57,6 @@ export function parseCommand(input) {
     const obj = JSON.parse(input);
     if (typeof obj === "object" && obj !== null && typeof obj.exec === "string") {
       return {
-        name: typeof obj.name === "string" && obj.name.length > 0 ? obj.name : null,
         command: obj.exec,
         sleep: typeof obj.sleep === "number" && obj.sleep > 0 ? obj.sleep : null,
         waitPort: typeof obj.waitPort === "number" && obj.waitPort > 0 ? obj.waitPort : null,
@@ -69,7 +66,7 @@ export function parseCommand(input) {
   } catch {
     // Not JSON, treat as plain command string
   }
-  return { name: null, command: input, sleep: null, waitPort: null, waitFile: null };
+  return { command: input, sleep: null, waitPort: null, waitFile: null };
 }
 
 /**

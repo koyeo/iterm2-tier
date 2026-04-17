@@ -1,48 +1,32 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { writeFileSync, unlinkSync, mkdtempSync } from "node:fs";
+import { writeFileSync, mkdirSync, mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { parseCommand, wrapCommand, buildPanes, loadCommandFile } from "../src/cmd.js";
 
 describe("parseCommand", () => {
-  it("treats plain string as unnamed command", () => {
+  it("treats plain string as command", () => {
     const pane = parseCommand("npm run dev");
-    assert.equal(pane.name, null);
     assert.equal(pane.command, "npm run dev");
     assert.equal(pane.sleep, null);
     assert.equal(pane.waitPort, null);
     assert.equal(pane.waitFile, null);
   });
 
-  it("parses JSON with name and exec", () => {
-    const pane = parseCommand('{"name":"server","exec":"npm run dev"}');
-    assert.equal(pane.name, "server");
+  it("parses JSON with exec", () => {
+    const pane = parseCommand('{"exec":"npm run dev"}');
     assert.equal(pane.command, "npm run dev");
   });
 
-  it("parses JSON with exec only (no name)", () => {
-    const pane = parseCommand('{"exec":"htop"}');
-    assert.equal(pane.name, null);
-    assert.equal(pane.command, "htop");
-  });
-
   it("treats JSON without exec field as plain string", () => {
-    const pane = parseCommand('{"name":"server"}');
-    assert.equal(pane.name, null);
-    assert.equal(pane.command, '{"name":"server"}');
+    const pane = parseCommand('{"foo":"bar"}');
+    assert.equal(pane.command, '{"foo":"bar"}');
   });
 
   it("treats invalid JSON as plain string", () => {
     const pane = parseCommand("{broken");
-    assert.equal(pane.name, null);
     assert.equal(pane.command, "{broken");
-  });
-
-  it("treats JSON with empty name as unnamed", () => {
-    const pane = parseCommand('{"name":"","exec":"ls"}');
-    assert.equal(pane.name, null);
-    assert.equal(pane.command, "ls");
   });
 
   it("parses sleep field", () => {
@@ -116,14 +100,9 @@ describe("wrapCommand", () => {
 
 describe("buildPanes", () => {
   it("builds panes from command array", () => {
-    const panes = buildPanes([
-      "htop",
-      '{"name":"server","exec":"npm start"}',
-    ]);
+    const panes = buildPanes(["htop", '{"exec":"npm start"}']);
     assert.equal(panes.length, 2);
-    assert.equal(panes[0].name, null);
     assert.equal(panes[0].command, "htop");
-    assert.equal(panes[1].name, "server");
     assert.equal(panes[1].command, "npm start");
   });
 
@@ -142,26 +121,16 @@ describe("loadCommandFile", () => {
     return filePath;
   }
 
-  // Create temp dir before tests
   tmpDir = mkdtempSync(join(tmpdir(), "tier-test-"));
 
   it("loads commands object with strings and objects", () => {
     const file = writeTmpFile("basic.json", JSON.stringify({
-      commands: [
-        "htop",
-        { name: "server", exec: "npm start" },
-        { exec: "npm test", waitPort: 3000 },
-      ],
+      commands: ["htop", { exec: "npm start" }, { exec: "npm test", waitPort: 3000 }],
     }));
     const result = loadCommandFile(file);
     assert.equal(result.commands.length, 3);
     assert.equal(result.commands[0], "htop");
     assert.equal(result.dir, null);
-    const parsed1 = JSON.parse(result.commands[1]);
-    assert.equal(parsed1.name, "server");
-    assert.equal(parsed1.exec, "npm start");
-    const parsed2 = JSON.parse(result.commands[2]);
-    assert.equal(parsed2.waitPort, 3000);
   });
 
   it("resolves relative dir from config file directory", () => {
@@ -192,9 +161,7 @@ describe("loadCommandFile", () => {
   });
 
   it("returns null dir when not specified", () => {
-    const file = writeTmpFile("nodir.json", JSON.stringify({
-      commands: ["ls"],
-    }));
+    const file = writeTmpFile("nodir.json", JSON.stringify({ commands: ["ls"] }));
     const result = loadCommandFile(file);
     assert.equal(result.dir, null);
   });
@@ -215,16 +182,12 @@ describe("loadCommandFile", () => {
 
   it("works with buildPanes end-to-end", () => {
     const file = writeTmpFile("e2e.json", JSON.stringify({
-      commands: [
-        "htop",
-        { name: "web", exec: "npm start", sleep: 2 },
-      ],
+      commands: ["htop", { exec: "npm start", sleep: 2 }],
     }));
     const result = loadCommandFile(file);
     const panes = buildPanes(result.commands);
     assert.equal(panes.length, 2);
     assert.equal(panes[0].command, "htop");
-    assert.equal(panes[1].name, "web");
     assert.equal(panes[1].command, "npm start");
     assert.equal(panes[1].sleep, 2);
   });

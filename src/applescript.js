@@ -123,6 +123,8 @@ function emitPaneActions(lines, indent, pane, dir) {
  */
 export function generateScript(panes, dir) {
   const splitDir = "horizontally";
+  const indent = "        ";
+  const indent2 = "            ";
   const lines = [
     'tell application "iTerm2"',
     "    activate",
@@ -135,25 +137,27 @@ export function generateScript(panes, dir) {
     "            set newTab to (create tab with default profile)",
     "        end tell",
     "    end if",
-    "    tell current session of current tab of w",
+    // Save the first session as s1
+    `${indent}set s1 to current session of current tab of w`,
+    `${indent}tell s1`,
   ];
 
-  // First pane in current session of new tab
-  emitPaneActions(lines, "            ", panes[0], dir);
+  // First pane
+  emitPaneActions(lines, indent2, panes[0], dir);
+  lines.push(`${indent}end tell`);
 
-  // Subsequent panes each get a new split
+  // Subsequent panes: always split from the last session to maintain order
   for (let i = 1; i < panes.length; i++) {
-    lines.push("        end tell");
-    lines.push("        tell current session of current tab of w");
-    lines.push(
-      `            set newSession to (split ${splitDir} with default profile)`,
-    );
-    lines.push("            tell newSession");
-    emitPaneActions(lines, "                ", panes[i], dir);
-    lines.push("            end tell");
+    const prev = `s${i}`;
+    const curr = `s${i + 1}`;
+    lines.push(`${indent}tell ${prev}`);
+    lines.push(`${indent2}set ${curr} to (split ${splitDir} with default profile)`);
+    lines.push(`${indent}end tell`);
+    lines.push(`${indent}tell ${curr}`);
+    emitPaneActions(lines, indent2, panes[i], dir);
+    lines.push(`${indent}end tell`);
   }
 
-  lines.push("        end tell");
   lines.push("end tell");
   lines.push("");
 
